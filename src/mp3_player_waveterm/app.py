@@ -1,3 +1,5 @@
+
+from pathlib import Path
 import sys
 
 try:
@@ -48,9 +50,10 @@ class WaveTermMP3App(App):
         ("q", "quit", "Quit"),
     ]
 
-    def __init__(self, root: str | None = None) -> None:
+    def __init__(self, root: str | None = None, read_tags: bool = False) -> None:
         super().__init__()
         self._explicit_root = root
+        self._read_tags = read_tags
         self.root_path: Path = resolve_root(root)
         self.tracks: list[Track] = []
         self.player: Player = create_player()
@@ -68,11 +71,13 @@ class WaveTermMP3App(App):
         self.rescan_library()
         backend = getattr(self.player, "name", self.player.__class__.__name__)
         reason = getattr(self.player, "reason", "")
-        self.notify(f"audio backend: {backend} {reason}".strip())
+        scan_mode = "full" if self._read_tags else "fast"
+        message = f"audio backend: {backend} {reason}".strip()
+        self.notify(f"{message} | scan mode: {scan_mode}")
 
     def rescan_library(self) -> None:
         self.root_path = resolve_root(self._explicit_root)
-        self.tracks = scan_library(self.root_path)
+        self.tracks = scan_library(self.root_path, read_tags=self._read_tags)
 
         tracks_view = self.query_one("#tracks", ListView)
         tracks_view.clear()
@@ -89,9 +94,10 @@ class WaveTermMP3App(App):
         now = self.now_playing.display if self.now_playing else "idle"
         position = self.player.position_text()
         backend = getattr(self.player, "name", self.player.__class__.__name__)
+        scan_mode = "full" if self._read_tags else "fast"
         status = (
             f"Root: {self.root_path}\n"
-            f"Tracks: {len(self.tracks)} | Now: {now} | "
+            f"Tracks: {len(self.tracks)} | Scan: {scan_mode} | Now: {now} | "
             f"State: {'playing' if self.player.is_playing() else 'stopped'} | {position} | {backend}"
         )
         self.query_one("#status", Static).update(status)
@@ -189,7 +195,13 @@ class WaveTermMP3App(App):
 
 def main() -> None:
     root = None
+    read_tags = False
     args = sys.argv[1:]
+
+    if "--full-scan" in args:
+        read_tags = True
+        args = [arg for arg in args if arg != "--full-scan"]
+
     if "--root" in args:
         idx = args.index("--root")
         if idx + 1 < len(args):
@@ -197,4 +209,4 @@ def main() -> None:
     elif args:
         root = args[0]
 
-    WaveTermMP3App(root=root).run()
+    WaveTermMP3App(root=root, read_tags=read_tags).run()

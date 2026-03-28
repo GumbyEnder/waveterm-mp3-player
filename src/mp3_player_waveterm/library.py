@@ -42,24 +42,31 @@ def resolve_root(explicit_root: str | None = None) -> Path:
     return Path(root).expanduser()
 
 
-def scan_library(root: Path) -> list[Track]:
+def iter_mp3_paths(root: Path) -> Iterable[Path]:
     if not root.exists():
         return []
 
-    mp3_paths = sorted(
-        (p for p in root.rglob("*.mp3") if p.is_file()),
-        key=lambda p: (str(p.parent).lower(), p.name.lower()),
-    )
-    return [track_from_path(path) for path in mp3_paths]
+    collected: list[Path] = []
+    for dirpath, _, filenames in os.walk(root):
+        dirpath_path = Path(dirpath)
+        for filename in filenames:
+            if filename.lower().endswith(".mp3"):
+                collected.append(dirpath_path / filename)
+    collected.sort(key=lambda p: (str(p.parent).lower(), p.name.lower()))
+    return collected
 
 
-def track_from_path(path: Path) -> Track:
+def scan_library(root: Path, read_tags: bool = False) -> list[Track]:
+    return [track_from_path(path, read_tags=read_tags) for path in iter_mp3_paths(root)]
+
+
+def track_from_path(path: Path, read_tags: bool = False) -> Track:
     band = path.stem
     album = path.parent.name or "Unknown Album"
     song = path.stem
     duration: int | None = None
 
-    if MutagenFile is not None:
+    if read_tags and MutagenFile is not None:
         try:
             audio = MutagenFile(path, easy=True)
             if audio:
@@ -76,6 +83,14 @@ def track_from_path(path: Path) -> Track:
     return Track(path=path, band=band, album=album, song=song, duration=duration)
 
 
+def enrich_track(track: Track) -> Track:
+    return track_from_path(track.path, read_tags=True)
+
+
+def enrich_tracks(tracks: Iterable[Track]) -> list[Track]:
+    return [enrich_track(track) for track in tracks]
+
+
 def _pick(tags: dict, *keys: str, default: str) -> str:
     for key in keys:
         value = tags.get(key)
@@ -88,7 +103,3 @@ def _pick(tags: dict, *keys: str, default: str) -> str:
             if text:
                 return text
     return default
-
-
-def tracks_for_paths(paths: Iterable[Path]) -> list[Track]:
-    return [track_from_path(path) for path in paths]

@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
+import os
+import platform
 from typing import Protocol
 
 
@@ -43,8 +45,7 @@ class VLCPlayer:
     name = "vlc"
 
     def __init__(self) -> None:
-        import vlc  # type: ignore
-
+        vlc = import_vlc()
         self._instance = vlc.Instance("--no-video", "--quiet")
         self._player = self._instance.media_player_new()
         self._player.audio_set_volume(100)
@@ -92,11 +93,70 @@ class VLCPlayer:
         return self._state
 
 
-def create_player() -> Player:
+class BackendProbe:
+    def __init__(self, available: bool, detail: str) -> None:
+        self.available = available
+        self.detail = detail
+
+
+def probe_vlc() -> BackendProbe:
     try:
-        return VLCPlayer()
+        vlc = import_vlc()
     except Exception as exc:
-        return NullPlayer(reason=f"no in-app audio backend: {exc.__class__.__name__}")
+        return BackendProbe(False, f"python-vlc import failed: {exc}")
+
+    try:
+        instance = vlc.Instance("--no-video", "--quiet")
+        _ = instance.media_player_new()
+        return BackendProbe(True, "VLC/libVLC available")
+    except Exception as exc:
+        return BackendProbe(False, f"VLC/libVLC init failed: {exc}")
+
+
+def create_player() -> Player:
+    probe = probe_vlc()
+    if probe.available:
+        return VLCPlayer()
+    return NullPlayer(reason=f"no in-app audio backend: {probe.detail}")
+
+
+def doctor() -> None:
+    probe = probe_vlc()
+    print(f"VLC available: {probe.available}")
+    print(f"Detail: {probe.detail}")
+    if platform.system().lower().startswith("win"):
+        print(r"Windows VLC search paths checked: Program Files\VideoLAN\VLC and Program Files (x86)\VideoLAN\VLC")
+
+
+def import_vlc():
+    if platform.system().lower().startswith("win"):
+        _add_windows_vlc_paths()
+    import vlc  # type: ignore
+
+    return vlc
+
+
+def _add_windows_vlc_paths() -> None:
+    candidates = []
+    for env_key in ("PROGRAMFILES", "PROGRAMFILES(X86)"):
+        base = os.environ.get(env_key)
+        if base:
+            candidates.append(Path(base) / "VideoLAN" / "VLC")
+    candidates.extend([
+        Path(r"C:\Program Files\VideoLAN\VLC"),
+        Path(r"C:\Program Files (x86)\VideoLAN\VLC"),
+    ])
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        try:
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(str(candidate))
+        except Exception:
+            pass
+        os.environ["PATH"] = f"{candidate}{os.pathsep}" + os.environ.get("PATH", "")
+        break
 
 
 def _format_ms(value: int) -> str:

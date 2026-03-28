@@ -1,4 +1,3 @@
-This folder now contains a runnable scaffold for the WaveTerm MP3 player.
 
 ## Files
 - `pyproject.toml` - Python package metadata and dependencies
@@ -35,9 +34,15 @@ python -m pip install -e .
 python -m mp3_player_waveterm --root "/path/to/music"
 ```
 
-In-app playback uses VLC via `python-vlc`.
+Helpful commands:
 
-Install it with:
+```bash
+waveterm-mp3-doctor
+python -m mp3_player_waveterm --full-scan --root "K:\media vault\music"
+```
+
+In-app playback uses VLC via `python-vlc`.
+Install the Python binding with:
 
 ```bash
 python -m pip install python-vlc
@@ -45,7 +50,9 @@ python -m pip install python-vlc
 
 You also need the VLC application installed on Windows so the Python binding can load `libvlc`.
 
-## Notes
+## Performance notes
+- Default startup uses a fast scan: file names only, no tag reads.
+- Use `--full-scan` when you want richer metadata and don't mind the slower first load.
 - The playlist is the file tree, not M3U files.
 - Metadata falls back cleanly when tags are missing.
 - If VLC is unavailable, the app still boots and shows a safe no-op player.
