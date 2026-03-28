@@ -1,6 +1,7 @@
 
 from pathlib import Path
 import sys
+from threading import Thread
 
 try:
     from textual.app import App, ComposeResult
@@ -28,6 +29,12 @@ class WaveTermMP3App(App):
         border: heavy $accent;
     }
 
+    #visualizer {
+        height: 1;
+        padding: 0 1;
+        color: $primary;
+    }
+
     #tracks {
         height: 1fr;
         border: heavy $primary;
@@ -42,7 +49,7 @@ class WaveTermMP3App(App):
 
     BINDINGS = [
         ("enter", "play_selected", "Play"),
-        ("space", "pause_resume", "Pause/Resume"),
+        ("space", "pause_resume", "Play/Pause"),
         ("n", "next_track", "Next"),
         ("p", "previous_track", "Previous"),
         ("s", "stop", "Stop"),
@@ -50,35 +57,59 @@ class WaveTermMP3App(App):
         ("q", "quit", "Quit"),
     ]
 
-    def __init__(self, root: str | None = None, read_tags: bool = False) -> None:
+    def __init__(self, root: str | None = None, read_tags: bool = False, visuals: bool = False, use_cache: bool = True) -> None:
         super().__init__()
         self._explicit_root = root
         self._read_tags = read_tags
+        self._visuals = visuals
+        self._use_cache = use_cache
         self.root_path: Path = resolve_root(root)
         self.tracks: list[Track] = []
         self.player: Player = create_player()
         self.current_index: int = 0
         self.now_playing: Track | None = None
+        self._loading = True
+        self._scan_generation = 0
+        self._visual_frame = 0
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Static(id="status")
+        if self._visuals:
+            yield Static(id="visualizer")
         yield ListView(id="tracks")
         yield Static(id="details")
         yield Footer()
 
     def on_mount(self) -> None:
-        self.rescan_library()
+        self._schedule_scan()
+        if self._visuals:
+            self.set_interval(0.18, self._tick_visualizer)
         backend = getattr(self.player, "name", self.player.__class__.__name__)
         reason = getattr(self.player, "reason", "")
         scan_mode = "full" if self._read_tags else "fast"
-        message = f"audio backend: {backend} {reason}".strip()
-        self.notify(f"{message} | scan mode: {scan_mode}")
+        cache_mode = "on" if self._use_cache else "off"
+        self.notify(f"audio backend: {backend} {reason}".strip())
+        self.notify(f"scan mode: {scan_mode} | cache: {cache_mode}")
 
-    def rescan_library(self) -> None:
-        self.root_path = resolve_root(self._explicit_root)
-        self.tracks = scan_library(self.root_path, read_tags=self._read_tags)
+    def _schedule_scan(self) -> None:
+        self._scan_generation += 1
+        generation = self._scan_generation
+        self._loading = True
+        self._render_status()
+        self._render_details(None)
+        self._render_visualizer()
+        Thread(target=self._load_library_thread, args=(generation,), daemon=True).start()
 
+    def _load_library_thread(self, generation: int) -> None:
+        tracks = scan_library(self.root_path, read_tags=self._read_tags, use_cache=self._use_cache)
+        self.call_from_thread(self._apply_scan_result, generation, tracks)
+
+    def _apply_scan_result(self, generation: int, tracks: list[Track]) -> None:
+        if generation != self._scan_generation:
+            return
+
+        self.tracks = tracks
         tracks_view = self.query_one("#tracks", ListView)
         tracks_view.clear()
         for track in self.tracks:
@@ -87,20 +118,45 @@ class WaveTermMP3App(App):
             tracks_view.append(item)
 
         self.current_index = 0
+        self._loading = False
         self._render_status()
         self._render_details(self.tracks[0] if self.tracks else None)
+        self._render_visualizer()
 
     def _render_status(self) -> None:
         now = self.now_playing.display if self.now_playing else "idle"
         position = self.player.position_text()
         backend = getattr(self.player, "name", self.player.__class__.__name__)
         scan_mode = "full" if self._read_tags else "fast"
+        load_state = "loading" if self._loading else "ready"
         status = (
             f"Root: {self.root_path}\n"
-            f"Tracks: {len(self.tracks)} | Scan: {scan_mode} | Now: {now} | "
-            f"State: {'playing' if self.player.is_playing() else 'stopped'} | {position} | {backend}"
+            f"Tracks: {len(self.tracks)} | Scan: {scan_mode} | Load: {load_state} | "
+            f"Now: {now} | State: {'playing' if self.player.is_playing() else 'stopped'} | {position} | {backend}"
         )
         self.query_one("#status", Static).update(status)
+
+    def _render_visualizer(self) -> None:
+        if not self._visuals:
+            return
+        visual = self.query_one("#visualizer", Static)
+        if self._loading:
+            visual.update("Loading music library…")
+            return
+        if not self.now_playing:
+            visual.update("Idle")
+            return
+        if self.player.is_playing():
+            blocks = "▁▂▃▄▅▆▇█"
+            frame = self._visual_frame % len(blocks)
+            bar = "".join(blocks[(frame + i) % len(blocks)] for i in range(24))
+            visual.update(f"Playing {self.now_playing.song} {bar}")
+        else:
+            visual.update(f"Paused {self.now_playing.song}")
+
+    def _tick_visualizer(self) -> None:
+        self._visual_frame += 1
+        self._render_visualizer()
 
     def _render_details(self, track: Track | None) -> None:
         if track is None:
@@ -140,6 +196,12 @@ class WaveTermMP3App(App):
         self.notify(f"playing via {backend}: {track.display}")
         self._render_status()
         self._render_details(track)
+        self._render_visualizer()
+
+    def _play_selected_or_start(self) -> None:
+        track = self._selected_track()
+        if track:
+            self._play_track(track)
 
     def on_list_view_highlighted(self, event) -> None:  # textual event API varies by version
         track = getattr(event.item, "track", None)
@@ -150,6 +212,7 @@ class WaveTermMP3App(App):
                 self.current_index = 0
             self._render_details(track)
             self._render_status()
+            self._render_visualizer()
 
     def on_list_view_selected(self, event) -> None:
         track = getattr(event.item, "track", None)
@@ -161,24 +224,31 @@ class WaveTermMP3App(App):
             self._play_track(track)
 
     def action_play_selected(self) -> None:
-        track = self._selected_track()
-        if track:
-            self._play_track(track)
+        self._play_selected_or_start()
 
     def action_pause_resume(self) -> None:
         if self.player.is_playing():
             self.player.pause()
-        else:
-            self.player.resume()
+            self._render_status()
+            self._render_visualizer()
+            return
+
+        if self.now_playing is None or self.player.position_text() in {"stopped", "player unavailable"} or getattr(self.player, "name", "") == "null":
+            self._play_selected_or_start()
+            return
+
+        self.player.resume()
         self._render_status()
+        self._render_visualizer()
 
     def action_stop(self) -> None:
         self.player.stop()
         self.now_playing = None
         self._render_status()
+        self._render_visualizer()
 
     def action_rescan(self) -> None:
-        self.rescan_library()
+        self._schedule_scan()
 
     def action_next_track(self) -> None:
         if not self.tracks:
@@ -196,11 +266,19 @@ class WaveTermMP3App(App):
 def main() -> None:
     root = None
     read_tags = False
+    visuals = False
+    use_cache = True
     args = sys.argv[1:]
 
     if "--full-scan" in args:
         read_tags = True
         args = [arg for arg in args if arg != "--full-scan"]
+    if "--visuals" in args:
+        visuals = True
+        args = [arg for arg in args if arg != "--visuals"]
+    if "--no-cache" in args:
+        use_cache = False
+        args = [arg for arg in args if arg != "--no-cache"]
 
     if "--root" in args:
         idx = args.index("--root")
@@ -209,4 +287,4 @@ def main() -> None:
     elif args:
         root = args[0]
 
-    WaveTermMP3App(root=root, read_tags=read_tags).run()
+    WaveTermMP3App(root=root, read_tags=read_tags, visuals=visuals, use_cache=use_cache).run()

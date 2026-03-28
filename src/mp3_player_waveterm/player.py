@@ -1,3 +1,4 @@
+
 from dataclasses import dataclass
 from pathlib import Path
 import os
@@ -129,34 +130,54 @@ def doctor() -> None:
 
 
 def import_vlc():
-    if platform.system().lower().startswith("win"):
-        _add_windows_vlc_paths()
+    _prepare_vlc_paths()
     import vlc  # type: ignore
 
     return vlc
 
 
-def _add_windows_vlc_paths() -> None:
-    candidates = []
-    for env_key in ("PROGRAMFILES", "PROGRAMFILES(X86)"):
-        base = os.environ.get(env_key)
-        if base:
-            candidates.append(Path(base) / "VideoLAN" / "VLC")
-    candidates.extend([
-        Path(r"C:\Program Files\VideoLAN\VLC"),
-        Path(r"C:\Program Files (x86)\VideoLAN\VLC"),
-    ])
+def _prepare_vlc_paths() -> None:
+    system = platform.system().lower()
+    candidates: list[Path] = []
+
+    if system.startswith("win"):
+        for env_key in ("PROGRAMFILES", "PROGRAMFILES(X86)"):
+            base = os.environ.get(env_key)
+            if base:
+                candidates.append(Path(base) / "VideoLAN" / "VLC")
+        candidates.extend([
+            Path(r"C:\Program Files\VideoLAN\VLC"),
+            Path(r"C:\Program Files (x86)\VideoLAN\VLC"),
+        ])
+    elif system == "darwin":
+        candidates.extend([
+            Path("/Applications/VLC.app/Contents/MacOS"),
+            Path("/Applications/VLC.app/Contents/MacOS/lib"),
+        ])
+    else:
+        candidates.extend([
+            Path("/usr/lib/vlc"),
+            Path("/usr/lib64/vlc"),
+            Path("/usr/local/lib/vlc"),
+            Path("/snap/vlc/current/usr/lib/vlc"),
+        ])
 
     for candidate in candidates:
         if not candidate.exists():
             continue
         try:
-            if hasattr(os, "add_dll_directory"):
+            if system.startswith("win") and hasattr(os, "add_dll_directory"):
                 os.add_dll_directory(str(candidate))
         except Exception:
             pass
-        os.environ["PATH"] = f"{candidate}{os.pathsep}" + os.environ.get("PATH", "")
-        break
+
+        key = "PATH"
+        if system == "darwin":
+            key = "DYLD_LIBRARY_PATH"
+        os.environ[key] = f"{candidate}{os.pathsep}" + os.environ.get(key, "")
+        if system.startswith("win"):
+            os.environ["PATH"] = f"{candidate}{os.pathsep}" + os.environ.get("PATH", "")
+        return
 
 
 def _format_ms(value: int) -> str:

@@ -1,6 +1,7 @@
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
+import json
 import os
 import platform
 from typing import Iterable
@@ -32,13 +33,22 @@ class Track:
 
 
 DEFAULT_WINDOWS_ROOT = r"K:\media vault\music"
+DEFAULT_MAC_ROOT = str(Path.home() / "Music")
 DEFAULT_LINUX_ROOT = str(Path.home() / "Music")
+CACHE_DIR = Path.home() / ".waveterm-mp3"
+CACHE_FILE = CACHE_DIR / "library-cache.json"
 
 
 def resolve_root(explicit_root: str | None = None) -> Path:
     root = explicit_root or os.environ.get("MP3_ROOT")
     if not root:
-        root = DEFAULT_WINDOWS_ROOT if platform.system().lower().startswith("win") else DEFAULT_LINUX_ROOT
+        system = platform.system().lower()
+        if system.startswith("win"):
+            root = DEFAULT_WINDOWS_ROOT
+        elif system == "darwin":
+            root = DEFAULT_MAC_ROOT
+        else:
+            root = DEFAULT_LINUX_ROOT
     return Path(root).expanduser()
 
 
@@ -56,8 +66,15 @@ def iter_mp3_paths(root: Path) -> Iterable[Path]:
     return collected
 
 
-def scan_library(root: Path, read_tags: bool = False) -> list[Track]:
-    return [track_from_path(path, read_tags=read_tags) for path in iter_mp3_paths(root)]
+def scan_library(root: Path, read_tags: bool = False, use_cache: bool = True) -> list[Track]:
+    cached = _load_cache(root, read_tags) if use_cache else None
+    if cached is not None:
+        return cached
+
+    tracks = [track_from_path(path, read_tags=read_tags) for path in iter_mp3_paths(root)]
+    if use_cache:
+        _save_cache(root, read_tags, tracks)
+    return tracks
 
 
 def track_from_path(path: Path, read_tags: bool = False) -> Track:
@@ -103,3 +120,66 @@ def _pick(tags: dict, *keys: str, default: str) -> str:
             if text:
                 return text
     return default
+
+
+def _cache_signature(root: Path) -> dict:
+    try:
+        stat = root.stat()
+        return {"root_mtime_ns": stat.st_mtime_ns, "root_exists": True}
+    except FileNotFoundError:
+        return {"root_exists": False, "root_mtime_ns": 0}
+
+
+def _load_cache(root: Path, read_tags: bool) -> list[Track] | None:
+    if not CACHE_FILE.exists():
+        return None
+    try:
+        data = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+    if data.get("root") != str(root):
+        return None
+    if data.get("read_tags") != read_tags:
+        return None
+    if data.get("signature") != _cache_signature(root):
+        return None
+
+    tracks: list[Track] = []
+    for item in data.get("tracks", []):
+        try:
+            tracks.append(
+                Track(
+                    path=Path(item["path"]),
+                    band=item.get("band", Path(item["path"]).stem),
+                    album=item.get("album", Path(item["path"]).parent.name),
+                    song=item.get("song", Path(item["path"]).stem),
+                    duration=item.get("duration"),
+                )
+            )
+        except Exception:
+            continue
+    return tracks
+
+
+def _save_cache(root: Path, read_tags: bool, tracks: list[Track]) -> None:
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "root": str(root),
+            "read_tags": read_tags,
+            "signature": _cache_signature(root),
+            "tracks": [
+                {
+                    "path": str(track.path),
+                    "band": track.band,
+                    "album": track.album,
+                    "song": track.song,
+                    "duration": track.duration,
+                }
+                for track in tracks
+            ],
+        }
+        CACHE_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except Exception:
+        pass
