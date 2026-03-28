@@ -1,0 +1,25 @@
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waveterm-mp3-player"
+version = "0.1.0"
+description = "Compact file-based MP3 browser/player for WaveTerm"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "textual>=0.58",
+  "mutagen>=1.47",
+]
+
+[project.optional-dependencies]
+vlc = ["python-vlc>=3.0.20123"]
+
+[project.scripts]
+waveterm-mp3 = "mp3_player_waveterm.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
