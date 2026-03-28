@@ -1,4 +1,12 @@
 
+A compact MP3 browser/player for WaveTerm and narrow terminal panes.
+
+It scans a music folder, shows a short track list, keeps the current track visible at the top, and is meant to be fast to launch in a PowerShell tab inside WaveTerm.
+
+## Screenshot
+
+![WaveTerm MP3 player screenshot](./waveterm-ss.jpg)
+
 - browses a folder tree of `.mp3` files
 - shows short metadata like `band · album · song`
 - keeps the now-playing status pinned at the top
