@@ -1,4 +1,3 @@
-
 ## What it does
 
 - browses a folder tree of `.mp3` files
@@ -180,12 +179,7 @@ Best results are in a narrow WaveTerm pane or a 1/4-width split.
 
 ## Roadmap
 
-Next things I want to tackle:
-
-- Mac and Linux support polish
-- optional visualizations beyond the simple bar display
-- more speed-ups and startup caching
-- general polish and small usability improvements
+See `PLAN.md` for the current working plan.
 
 ## Credits
 
