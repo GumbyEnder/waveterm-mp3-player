@@ -1,7 +1,7 @@
 
 from pathlib import Path
-import sys
 from threading import Thread
+import sys
 
 try:
     from textual.app import App, ComposeResult
@@ -57,11 +57,12 @@ class WaveTermMP3App(App):
         ("q", "quit", "Quit"),
     ]
 
-    def __init__(self, root: str | None = None, read_tags: bool = False, visuals: bool = False, use_cache: bool = True) -> None:
+    def __init__(self, root: str | None = None, read_tags: bool = False, visuals: bool = False, visual_mode: str = "pulse", use_cache: bool = True) -> None:
         super().__init__()
         self._explicit_root = root
         self._read_tags = read_tags
         self._visuals = visuals
+        self._visual_mode = visual_mode
         self._use_cache = use_cache
         self.root_path: Path = resolve_root(root)
         self.tracks: list[Track] = []
@@ -90,8 +91,9 @@ class WaveTermMP3App(App):
         reason = getattr(self.player, "reason", "")
         scan_mode = "full" if self._read_tags else "fast"
         cache_mode = "on" if self._use_cache else "off"
+        mode_text = f"{self._visual_mode}{' + visuals' if self._visuals else ''}"
         self.notify(f"audio backend: {backend} {reason}".strip())
-        self.notify(f"scan mode: {scan_mode} | cache: {cache_mode}")
+        self.notify(f"scan mode: {scan_mode} | cache: {cache_mode} | visuals: {mode_text}")
 
     def _schedule_scan(self) -> None:
         self._scan_generation += 1
@@ -130,10 +132,11 @@ class WaveTermMP3App(App):
         backend = getattr(self.player, "name", self.player.__class__.__name__)
         scan_mode = "full" if self._read_tags else "fast"
         load_state = "loading" if self._loading else "ready"
+        visuals_state = self._visual_mode if self._visuals else "off"
         status = (
             f"Root: {self.root_path}\n"
             f"Tracks: {len(self.tracks)} | Scan: {scan_mode} | Load: {load_state} | "
-            f"Now: {now} | State: {'playing' if self.player.is_playing() else 'stopped'} | {position} | {backend}"
+            f"Now: {now} | State: {'playing' if self.player.is_playing() else 'stopped'} | {position} | {backend} | Visuals: {visuals_state}"
         )
         self.query_one("#status", Static).update(status)
 
@@ -147,13 +150,56 @@ class WaveTermMP3App(App):
         if not self.now_playing:
             visual.update("Idle")
             return
-        if self.player.is_playing():
-            blocks = "▁▂▃▄▅▆▇█"
-            frame = self._visual_frame % len(blocks)
-            bar = "".join(blocks[(frame + i) % len(blocks)] for i in range(24))
-            visual.update(f"Playing {self.now_playing.song} {bar}")
-        else:
-            visual.update(f"Paused {self.now_playing.song}")
+
+        if not self.player.is_playing():
+            visual.update(self._paused_visual())
+            return
+
+        visual.update(self._playing_visual())
+
+    def _paused_visual(self) -> str:
+        track = self.now_playing.song if self.now_playing else ""
+        if self._visual_mode == "minimal":
+            return f"Paused · {track}"
+        return f"Paused · {track} · ░░░░░░░░░░░"
+
+    def _playing_visual(self) -> str:
+        track = self.now_playing.song if self.now_playing else ""
+        mode = self._resolve_visual_mode()
+        frame = self._visual_frame
+
+        if mode == "minimal":
+            return f"▶ {track}"
+
+        if mode == "bars":
+            heights = [1, 3, 5, 7, 4, 6, 2, 5]
+            chars = " ▁▂▃▄▅▆▇█"
+            bars = [chars[(frame + h + i) % len(chars)] for i, h in enumerate(heights)]
+            return f"{track} {''.join(bars)}"
+
+        if mode == "wave":
+            waves = "~≈≋≋≈~≈≋~≈≋"
+            shift = frame % len(waves)
+            ribbon = (waves[shift:] + waves[:shift]) * 2
+            return f"{track} {ribbon[:20]}"
+
+        # pulse / auto default
+        pulse = "◐◓◑◒"
+        left = pulse[frame % len(pulse)]
+        right = pulse[(frame + 2) % len(pulse)]
+        fill = "█" * (4 + (frame % 6))
+        return f"{left} {track} {fill} {right}"
+
+    def _resolve_visual_mode(self) -> str:
+        if self._visual_mode != "auto":
+            return self._visual_mode
+        if not self.now_playing:
+            return "minimal"
+        if self.now_playing.duration is not None and self.now_playing.duration >= 360:
+            return "wave"
+        if self.now_playing.duration is not None and self.now_playing.duration >= 180:
+            return "bars"
+        return "pulse"
 
     def _tick_visualizer(self) -> None:
         self._visual_frame += 1
@@ -274,6 +320,7 @@ def main() -> None:
     root = None
     read_tags = False
     visuals = False
+    visual_mode = "pulse"
     use_cache = True
     args = sys.argv[1:]
 
@@ -283,6 +330,11 @@ def main() -> None:
     if "--visuals" in args:
         visuals = True
         args = [arg for arg in args if arg != "--visuals"]
+    if "--visual-mode" in args:
+        idx = args.index("--visual-mode")
+        if idx + 1 < len(args):
+            visual_mode = args[idx + 1]
+        args = [arg for i, arg in enumerate(args) if i not in {idx, idx + 1}]
     if "--no-cache" in args:
         use_cache = False
         args = [arg for arg in args if arg != "--no-cache"]
@@ -294,4 +346,7 @@ def main() -> None:
     elif args:
         root = args[0]
 
-    WaveTermMP3App(root=root, read_tags=read_tags, visuals=visuals, use_cache=use_cache).run()
+    if visual_mode not in {"pulse", "bars", "wave", "minimal", "auto"}:
+        visual_mode = "pulse"
+
+    WaveTermMP3App(root=root, read_tags=read_tags, visuals=visuals, visual_mode=visual_mode, use_cache=use_cache).run()

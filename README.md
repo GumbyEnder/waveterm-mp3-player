@@ -1,4 +1,3 @@
-## What it does
 
 - browses a folder tree of `.mp3` files
 - shows short metadata like `band · album · song`
@@ -50,6 +49,16 @@ If you want the simple visualizer:
 
 ```powershell
 python -m mp3_player_waveterm --visuals --root "K:\media vault\music"
+```
+
+You can also pick a visual style explicitly:
+
+```powershell
+python -m mp3_player_waveterm --visuals --visual-mode pulse --root "K:\media vault\music"
+python -m mp3_player_waveterm --visuals --visual-mode bars --root "K:\media vault\music"
+python -m mp3_player_waveterm --visuals --visual-mode wave --root "K:\media vault\music"
+python -m mp3_player_waveterm --visuals --visual-mode minimal --root "K:\media vault\music"
+python -m mp3_player_waveterm --visuals --visual-mode auto --root "K:\media vault\music"
 ```
 
 ## WaveTerm widget snippets
