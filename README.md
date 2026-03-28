@@ -1,4 +1,3 @@
-
 A compact MP3 browser/player for WaveTerm and narrow terminal panes.
 
 It scans a music folder, shows a short track list, keeps the current track visible at the top, and is meant to be fast to launch in a PowerShell tab inside WaveTerm.
@@ -54,6 +53,90 @@ If you want the simple visualizer:
 
 ```powershell
 python -m mp3_player_waveterm --visuals --root "K:\media vault\music"
+```
+
+## WaveTerm widget snippets
+
+If you want this as a clickable WaveTerm widget, add one of these entries to your `widgets.json`.
+
+### Windows-safe widget
+
+Use this when you’re on the Windows box and want the player pointed at the NAS music folder:
+
+```json
+"waveterm-mp3": {
+  "display:order": 10,
+  "icon": "music",
+  "label": "mp3",
+  "color": "#8b5cf6",
+  "description": "WaveTerm MP3 player",
+  "blockdef": {
+    "meta": {
+      "view": "term",
+      "controller": "cmd",
+      "cmd": "python -m mp3_player_waveterm --root \"K:\\media vault\\music\"",
+      "cmd:shell": true,
+      "cmd:cwd": "K:\\agents\\hermes\\mp3",
+      "cmd:runonstart": true,
+      "cmd:clearonstart": true,
+      "cmd:closeonexit": false,
+      "cmd:nowsh": false
+    }
+  }
+}
+```
+
+### Mac/Linux widget
+
+Use this version on macOS or Linux. It assumes your music lives in `~/Music` and uses `python3`:
+
+```json
+"waveterm-mp3": {
+  "display:order": 10,
+  "icon": "music",
+  "label": "mp3",
+  "color": "#8b5cf6",
+  "description": "WaveTerm MP3 player",
+  "blockdef": {
+    "meta": {
+      "view": "term",
+      "controller": "cmd",
+      "cmd": "python3 -m mp3_player_waveterm --root \"$HOME/Music\"",
+      "cmd:shell": true,
+      "cmd:runonstart": true,
+      "cmd:clearonstart": true,
+      "cmd:closeonexit": false,
+      "cmd:nowsh": false
+    }
+  }
+}
+```
+
+### Visuals-on-start widget
+
+If you want the simple visualizer enabled every time the widget opens, use this command instead:
+
+```json
+"waveterm-mp3-visuals": {
+  "display:order": 11,
+  "icon": "music",
+  "label": "mp3+v",
+  "color": "#22c55e",
+  "description": "WaveTerm MP3 player with visuals",
+  "blockdef": {
+    "meta": {
+      "view": "term",
+      "controller": "cmd",
+      "cmd": "python -m mp3_player_waveterm --visuals --root \"K:\\media vault\\music\"",
+      "cmd:shell": true,
+      "cmd:cwd": "K:\\agents\\hermes\\mp3",
+      "cmd:runonstart": true,
+      "cmd:clearonstart": true,
+      "cmd:closeonexit": false,
+      "cmd:nowsh": false
+    }
+  }
+}
 ```
 
 ## WaveTerm setup
