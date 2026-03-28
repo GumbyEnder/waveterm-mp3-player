@@ -1,12 +1,17 @@
-WaveTerm MP3 Player
 
 A small, practical MP3 browser/player for WaveTerm and tight terminal panes.
 
 Use it when you want a fast music browser in a quarterpanel or narrow split without a lot of extra UI.
 
-## Screenshot
+## Screenshots
+
+Main view:
 
 ![WaveTerm MP3 player screenshot](./waveterm-ss.jpg)
+
+Quarterpanel view:
+
+![WaveTerm MP3 quarterpanel screenshot](./waveterm-ss-quarterpanel.jpg)
 
 ## What it does
 
