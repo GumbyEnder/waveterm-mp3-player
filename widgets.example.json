@@ -1,0 +1,60 @@
+  "waveterm-mp3": {
+    "display:order": 10,
+    "icon": "music",
+    "label": "mp3",
+    "color": "#8b5cf6",
+    "description": "WaveTerm MP3 player",
+    "blockdef": {
+      "meta": {
+        "view": "term",
+        "controller": "cmd",
+        "cmd": "python -m mp3_player_waveterm --root \"K:\\media vault\\music\"",
+        "cmd:shell": true,
+        "cmd:cwd": "K:\\agents\\hermes\\mp3",
+        "cmd:runonstart": true,
+        "cmd:clearonstart": true,
+        "cmd:closeonexit": false,
+        "cmd:nowsh": false
+      }
+    }
+  },
+  "waveterm-mp3-visuals": {
+    "display:order": 11,
+    "icon": "music",
+    "label": "mp3+v",
+    "color": "#22c55e",
+    "description": "WaveTerm MP3 player with visuals",
+    "blockdef": {
+      "meta": {
+        "view": "term",
+        "controller": "cmd",
+        "cmd": "python -m mp3_player_waveterm --visuals --root \"K:\\media vault\\music\"",
+        "cmd:shell": true,
+        "cmd:cwd": "K:\\agents\\hermes\\mp3",
+        "cmd:runonstart": true,
+        "cmd:clearonstart": true,
+        "cmd:closeonexit": false,
+        "cmd:nowsh": false
+      }
+    }
+  },
+  "waveterm-mp3-macos-linux": {
+    "display:order": 12,
+    "icon": "music",
+    "label": "mp3 unix",
+    "color": "#06b6d4",
+    "description": "WaveTerm MP3 player for macOS/Linux",
+    "blockdef": {
+      "meta": {
+        "view": "term",
+        "controller": "cmd",
+        "cmd": "python3 -m mp3_player_waveterm --root \"$HOME/Music\"",
+        "cmd:shell": true,
+        "cmd:runonstart": true,
+        "cmd:clearonstart": true,
+        "cmd:closeonexit": false,
+        "cmd:nowsh": false
+      }
+    }
+  }
+}

@@ -1,5 +1,3 @@
-A compact MP3 browser/player for WaveTerm and narrow terminal panes.
-
 It scans a music folder, shows a short track list, keeps the current track visible at the top, and is meant to be fast to launch in a PowerShell tab inside WaveTerm.
 
 ## What it does
@@ -57,7 +55,7 @@ python -m mp3_player_waveterm --visuals --root "K:\media vault\music"
 
 ## WaveTerm widget snippets
 
-If you want this as a clickable WaveTerm widget, add one of these entries to your `widgets.json`.
+If you want this as a clickable WaveTerm widget, see `WIDGETS.md` or copy `widgets.example.json` into your WaveTerm config.
 
 ### Windows-safe widget
 
@@ -196,6 +194,8 @@ Built by Shane Robinett / Shane @ Veanox.com.
 ## Files
 
 - `pyproject.toml` - Python package metadata and entry points
+- `WIDGETS.md` - widget setup guide and copy/paste snippets
+- `widgets.example.json` - ready-made WaveTerm widget examples
 - `src/mp3_player_waveterm/__main__.py` - module entry point
 - `src/mp3_player_waveterm/app.py` - Textual UI
 - `src/mp3_player_waveterm/library.py` - library scanning and metadata helpers
