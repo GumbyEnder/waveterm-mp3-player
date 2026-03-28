@@ -14,7 +14,9 @@
         "cmd:runonstart": true,
         "cmd:clearonstart": true,
         "cmd:closeonexit": false,
-        "cmd:nowsh": false
+        "cmd:nowsh": false,
+        "term:fontsize": 12,
+        "term:fontfamily": "JetBrains Mono"
       }
     }
   },
@@ -34,7 +36,9 @@
         "cmd:runonstart": true,
         "cmd:clearonstart": true,
         "cmd:closeonexit": false,
-        "cmd:nowsh": false
+        "cmd:nowsh": false,
+        "term:fontsize": 12,
+        "term:fontfamily": "JetBrains Mono"
       }
     }
   },
@@ -53,7 +57,9 @@
         "cmd:runonstart": true,
         "cmd:clearonstart": true,
         "cmd:closeonexit": false,
-        "cmd:nowsh": false
+        "cmd:nowsh": false,
+        "term:fontsize": 12,
+        "term:fontfamily": "JetBrains Mono"
       }
     }
   }

@@ -1,4 +1,3 @@
-
 A small, practical MP3 browser/player for WaveTerm and tight terminal panes.
 
 Use it when you want a fast music browser in a quarterpanel or narrow split without a lot of extra UI.
@@ -102,7 +101,9 @@ Use this when you’re on the Windows box and want the player pointed at the NAS
       "cmd:runonstart": true,
       "cmd:clearonstart": true,
       "cmd:closeonexit": false,
-      "cmd:nowsh": false
+      "cmd:nowsh": false,
+      "term:fontsize": 12,
+      "term:fontfamily": "JetBrains Mono"
     }
   }
 }
@@ -128,7 +129,9 @@ Use this version on macOS or Linux. It assumes your music lives in `~/Music` and
       "cmd:runonstart": true,
       "cmd:clearonstart": true,
       "cmd:closeonexit": false,
-      "cmd:nowsh": false
+      "cmd:nowsh": false,
+      "term:fontsize": 12,
+      "term:fontfamily": "JetBrains Mono"
     }
   }
 }
@@ -155,7 +158,9 @@ If you want the simple visualizer enabled every time the widget opens, use this 
       "cmd:runonstart": true,
       "cmd:clearonstart": true,
       "cmd:closeonexit": false,
-      "cmd:nowsh": false
+      "cmd:nowsh": false,
+      "term:fontsize": 12,
+      "term:fontfamily": "JetBrains Mono"
     }
   }
 }

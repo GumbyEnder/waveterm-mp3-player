@@ -23,7 +23,9 @@ Use this on the Windows machine that has WaveTerm and your NAS music folder moun
       "cmd:runonstart": true,
       "cmd:clearonstart": true,
       "cmd:closeonexit": false,
-      "cmd:nowsh": false
+      "cmd:nowsh": false,
+      "term:fontsize": 12,
+      "term:fontfamily": "JetBrains Mono"
     }
   }
 }
@@ -48,7 +50,9 @@ Use this if your music lives under `~/Music` and you want the repo to run with `
       "cmd:runonstart": true,
       "cmd:clearonstart": true,
       "cmd:closeonexit": false,
-      "cmd:nowsh": false
+      "cmd:nowsh": false,
+      "term:fontsize": 12,
+      "term:fontfamily": "JetBrains Mono"
     }
   }
 }
@@ -74,7 +78,9 @@ This starts the player with the simple built-in terminal visualizer enabled.
       "cmd:runonstart": true,
       "cmd:clearonstart": true,
       "cmd:closeonexit": false,
-      "cmd:nowsh": false
+      "cmd:nowsh": false,
+      "term:fontsize": 12,
+      "term:fontfamily": "JetBrains Mono"
     }
   }
 }
