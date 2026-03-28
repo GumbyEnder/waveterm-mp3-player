@@ -1,4 +1,3 @@
-
 This file is the short working plan for the repo.
 
 ## Done already
@@ -11,6 +10,9 @@ This file is the short working plan for the repo.
 - Windows-safe, Mac/Linux, and visuals-on-start widget snippets
 - `WIDGETS.md` and `widgets.example.json`
 - Auto-advance to the next track when a song ends
+- Search/filter by artist, album, song, or filename
+- Queue / playlist mode for sequencing multiple tracks
+- Save and restore last search, selection, queue, and now-playing state
 - Human-readable README
 
 ## Next pass: visual polish

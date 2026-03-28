@@ -1,5 +1,3 @@
-A small, practical MP3 browser/player for WaveTerm and tight terminal panes.
-
 Use it when you want a fast music browser in a quarterpanel or narrow split without a lot of extra UI.
 
 ## Screenshots
@@ -18,13 +16,17 @@ Quarterpanel view:
 - shows short metadata like `band · album · song`
 - keeps the now-playing status pinned at the top
 - supports keyboard control:
+  - / = focus search/filter
   - Enter = play selected
   - Space = play selected, or pause/resume when already playing
+  - a = add selected track to the queue
+  - c = clear the queue
   - n / p = next / previous
   - s = stop
   - r = rescan
   - q = quit
 - automatically advances to the next song when a track ends
+- remembers your last search, selection, queue, and now-playing state between launches
 - uses a fast startup scan by default so large libraries load quicker
 - can optionally show a simple terminal visualizer
 
@@ -204,6 +206,7 @@ Best results are in a narrow WaveTerm pane or a 1/4-width split.
 - The library scan runs in the background so the UI appears faster on big folders.
 - `--full-scan` reads tags with Mutagen and will take longer on large libraries.
 - A small local cache is used to speed up repeat launches.
+- Search/filter and queue state are saved locally so repeat sessions feel continuous.
 - The track list is the file tree itself, not M3U files.
 - Metadata falls back cleanly if tags are missing.
 

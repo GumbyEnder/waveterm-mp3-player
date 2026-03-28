@@ -1,5 +1,4 @@
-
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from pathlib import Path
 import json
 import os
@@ -37,6 +36,7 @@ DEFAULT_MAC_ROOT = str(Path.home() / "Music")
 DEFAULT_LINUX_ROOT = str(Path.home() / "Music")
 CACHE_DIR = Path.home() / ".waveterm-mp3"
 CACHE_FILE = CACHE_DIR / "library-cache.json"
+STATE_FILE = CACHE_DIR / "player-state.json"
 
 
 def resolve_root(explicit_root: str | None = None) -> Path:
@@ -181,5 +181,23 @@ def _save_cache(root: Path, read_tags: bool, tracks: list[Track]) -> None:
             ],
         }
         CACHE_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def load_state() -> dict:
+    try:
+        if not STATE_FILE.exists():
+            return {}
+        data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_state(state: dict) -> None:
+    try:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
     except Exception:
         pass
