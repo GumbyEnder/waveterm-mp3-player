@@ -85,6 +85,7 @@ class WaveTermMP3App(App):
         self._schedule_scan()
         if self._visuals:
             self.set_interval(0.18, self._tick_visualizer)
+        self.set_interval(0.5, self._poll_track_end)
         backend = getattr(self.player, "name", self.player.__class__.__name__)
         reason = getattr(self.player, "reason", "")
         scan_mode = "full" if self._read_tags else "fast"
@@ -157,6 +158,12 @@ class WaveTermMP3App(App):
     def _tick_visualizer(self) -> None:
         self._visual_frame += 1
         self._render_visualizer()
+
+    def _poll_track_end(self) -> None:
+        if self._loading or not self.tracks or self.now_playing is None:
+            return
+        if self.player.consume_end_event():
+            self.action_next_track()
 
     def _render_details(self, track: Track | None) -> None:
         if track is None:

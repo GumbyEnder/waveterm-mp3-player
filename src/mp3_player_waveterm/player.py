@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import os
 import platform
+import threading
 from typing import Protocol
 
 
@@ -15,6 +16,7 @@ class Player(Protocol):
     def stop(self) -> None: ...
     def is_playing(self) -> bool: ...
     def position_text(self) -> str: ...
+    def consume_end_event(self) -> bool: ...
 
 
 @dataclass
@@ -41,17 +43,42 @@ class NullPlayer:
     def position_text(self) -> str:
         return self.reason
 
+    def consume_end_event(self) -> bool:
+        return False
+
 
 class VLCPlayer:
     name = "vlc"
 
     def __init__(self) -> None:
         vlc = import_vlc()
+        self._vlc = vlc
         self._instance = vlc.Instance("--no-video", "--quiet")
         self._player = self._instance.media_player_new()
         self._player.audio_set_volume(100)
         self._current_path: Path | None = None
         self._state = "stopped"
+        self._ended = False
+        self._end_lock = threading.Lock()
+        self._attach_events()
+
+    def _attach_events(self) -> None:
+        try:
+            events = self._player.event_manager()
+            events.event_attach(self._vlc.EventType.MediaPlayerEndReached, self._on_end)
+        except Exception:
+            pass
+
+    def _on_end(self, event) -> None:  # callback from VLC thread
+        with self._end_lock:
+            self._ended = True
+
+    def consume_end_event(self) -> bool:
+        with self._end_lock:
+            if self._ended:
+                self._ended = False
+                return True
+        return False
 
     def play(self, path: Path) -> None:
         media = self._instance.media_new_path(str(path))
@@ -62,6 +89,8 @@ class VLCPlayer:
         self._player.audio_set_volume(100)
         self._current_path = path
         self._state = "playing"
+        with self._end_lock:
+            self._ended = False
 
     def pause(self) -> None:
         self._player.pause()
@@ -74,6 +103,8 @@ class VLCPlayer:
     def stop(self) -> None:
         self._player.stop()
         self._state = "stopped"
+        with self._end_lock:
+            self._ended = False
 
     def is_playing(self) -> bool:
         try:

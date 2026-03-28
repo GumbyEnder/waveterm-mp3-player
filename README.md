@@ -1,4 +1,3 @@
-It scans a music folder, shows a short track list, keeps the current track visible at the top, and is meant to be fast to launch in a PowerShell tab inside WaveTerm.
 
 ## What it does
 
@@ -12,6 +11,7 @@ It scans a music folder, shows a short track list, keeps the current track visib
   - s = stop
   - r = rescan
   - q = quit
+- automatically advances to the next song when a track ends
 - uses a fast startup scan by default so large libraries load quicker
 - can optionally show a simple terminal visualizer
 
