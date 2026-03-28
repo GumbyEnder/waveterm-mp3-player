@@ -1,4 +1,3 @@
-Use it when you want a fast music browser in a quarterpanel or narrow split without a lot of extra UI.
 
 ## Screenshots
 
@@ -204,6 +203,7 @@ Best results are in a narrow WaveTerm pane or a 1/4-width split.
 
 - Startup uses a fast scan by default: file names only, no tag parsing.
 - The library scan runs in the background so the UI appears faster on big folders.
+- Tracks are appended incrementally while scanning, so the list starts filling immediately instead of waiting for a full pass.
 - `--full-scan` reads tags with Mutagen and will take longer on large libraries.
 - A small local cache is used to speed up repeat launches.
 - Search/filter and queue state are saved locally so repeat sessions feel continuous.

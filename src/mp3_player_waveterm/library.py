@@ -1,6 +1,3 @@
-from dataclasses import dataclass
-from pathlib import Path
-import json
 import os
 import platform
 from typing import Iterable
@@ -56,22 +53,36 @@ def iter_mp3_paths(root: Path) -> Iterable[Path]:
     if not root.exists():
         return []
 
-    collected: list[Path] = []
-    for dirpath, _, filenames in os.walk(root):
-        dirpath_path = Path(dirpath)
-        for filename in filenames:
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort(key=str.lower)
+        for filename in sorted(filenames, key=str.lower):
             if filename.lower().endswith(".mp3"):
-                collected.append(dirpath_path / filename)
-    collected.sort(key=lambda p: (str(p.parent).lower(), p.name.lower()))
-    return collected
+                yield Path(dirpath) / filename
+
+
+def scan_library_batches(root: Path, read_tags: bool = False, batch_size: int = 50) -> Iterable[list[Track]]:
+    batch: list[Track] = []
+    for path in iter_mp3_paths(root):
+        batch.append(track_from_path(path, read_tags=read_tags))
+        if len(batch) >= batch_size:
+            yield batch
+            batch = []
+    if batch:
+        yield batch
+
+
+def load_cached_tracks(root: Path, read_tags: bool) -> list[Track] | None:
+    return _load_cache(root, read_tags)
 
 
 def scan_library(root: Path, read_tags: bool = False, use_cache: bool = True) -> list[Track]:
-    cached = _load_cache(root, read_tags) if use_cache else None
+    cached = load_cached_tracks(root, read_tags) if use_cache else None
     if cached is not None:
         return cached
 
-    tracks = [track_from_path(path, read_tags=read_tags) for path in iter_mp3_paths(root)]
+    tracks: list[Track] = []
+    for batch in scan_library_batches(root, read_tags=read_tags):
+        tracks.extend(batch)
     if use_cache:
         _save_cache(root, read_tags, tracks)
     return tracks
@@ -183,6 +194,10 @@ def _save_cache(root: Path, read_tags: bool, tracks: list[Track]) -> None:
         CACHE_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     except Exception:
         pass
+
+
+def save_cached_tracks(root: Path, read_tags: bool, tracks: list[Track]) -> None:
+    _save_cache(root, read_tags, tracks)
 
 
 def load_state() -> dict:

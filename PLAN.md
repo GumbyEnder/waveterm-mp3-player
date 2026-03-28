@@ -1,4 +1,3 @@
-This file is the short working plan for the repo.
 
 ## Done already
 
@@ -51,6 +50,7 @@ Ideas:
 
 - smarter cache invalidation
 - incremental refresh / rescan logic
+- append tracks to the UI as batches arrive so the list becomes usable immediately
 - background metadata loading only when requested
 - cache track lists by folder signature and mtime
 

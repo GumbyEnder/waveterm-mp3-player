@@ -9,7 +9,7 @@ except Exception:  # pragma: no cover - lets import fail loudly later if needed
 
 from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
-from .library import Track, load_state, resolve_root, save_state, scan_library
+from .library import Track, load_cached_tracks, load_state, resolve_root, save_cached_tracks, save_state, scan_library_batches
 from .player import Player, create_player
 
 
@@ -65,7 +65,14 @@ class WaveTermMP3App(App):
         ("q", "quit", "Quit"),
     ]
 
-    def __init__(self, root: str | None = None, read_tags: bool = False, visuals: bool = False, visual_mode: str = "pulse", use_cache: bool = True) -> None:
+    def __init__(
+        self,
+        root: str | None = None,
+        read_tags: bool = False,
+        visuals: bool = False,
+        visual_mode: str = "pulse",
+        use_cache: bool = True,
+    ) -> None:
         super().__init__()
         self._explicit_root = root
         self._read_tags = read_tags
@@ -84,6 +91,11 @@ class WaveTermMP3App(App):
         self._scan_generation = 0
         self._visual_frame = 0
         self._saved_state = load_state()
+        self._pending_selected_path: str | None = None
+        self._pending_resume_path: str | None = None
+        self._pending_queue_paths: set[str] = set()
+        self._restored_queue_paths: set[str] = set()
+        self._selection_initialized = False
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -118,62 +130,189 @@ class WaveTermMP3App(App):
         self._scan_generation += 1
         generation = self._scan_generation
         self._loading = True
+        self.tracks = []
+        self.filtered_tracks = []
+        self.current_index = 0
+        self._visual_frame = 0
+        self._selection_initialized = False
+        self._prepare_restore_state()
+        try:
+            self.query_one("#search", Input).value = self.search_query
+        except Exception:
+            pass
+        self._clear_tracks_view()
         self._render_status()
         self._render_details(None)
         self._render_visualizer()
         Thread(target=self._load_library_thread, args=(generation,), daemon=True).start()
 
-    def _load_library_thread(self, generation: int) -> None:
-        tracks = scan_library(self.root_path, read_tags=self._read_tags, use_cache=self._use_cache)
-        self.call_from_thread(self._apply_scan_result, generation, tracks)
-
-    def _apply_scan_result(self, generation: int, tracks: list[Track]) -> None:
-        if generation != self._scan_generation:
+    def _prepare_restore_state(self) -> None:
+        self._pending_selected_path = None
+        self._pending_resume_path = None
+        self._pending_queue_paths = set()
+        self._restored_queue_paths = set()
+        if not self._state_matches_root():
+            self.search_query = ""
+            self.queue = []
             return
 
-        self.tracks = tracks
+        self.search_query = str(self._saved_state.get("search_query", "") or "")
+        self._pending_selected_path = self._saved_state.get("selected_path") or None
+        self._pending_resume_path = self._saved_state.get("now_playing_path") or None
+        self._pending_queue_paths = {
+            str(path)
+            for path in self._saved_state.get("queue_paths", [])
+            if path
+        }
+        self.queue = []
+
+    def _load_library_thread(self, generation: int) -> None:
+        if self._use_cache:
+            cached = load_cached_tracks(self.root_path, self._read_tags)
+            if cached is not None:
+                self.call_from_thread(self._apply_cached_result, generation, cached)
+                return
+
+        all_tracks: list[Track] = []
+        for batch in scan_library_batches(self.root_path, read_tags=self._read_tags):
+            if generation != self._scan_generation:
+                return
+            all_tracks.extend(batch)
+            self.call_from_thread(self._append_scan_batch, generation, batch)
+
+        if generation != self._scan_generation:
+            return
+        if self._use_cache:
+            save_cached_tracks(self.root_path, self._read_tags, all_tracks)
+        self.call_from_thread(self._finish_scan_result, generation)
+
+    def _apply_cached_result(self, generation: int, tracks: list[Track]) -> None:
+        if generation != self._scan_generation:
+            return
+        self.tracks = list(tracks)
+        self.filtered_tracks = [track for track in self.tracks if self._track_matches_query(track, self.search_query)]
+        self.queue = []
         self._loading = False
-
-        search_value = ""
-        selected_path = None
-        queue_paths: list[str] = []
-        resume_path = None
-        resume_playing = False
-        if self._state_matches_root():
-            search_value = str(self._saved_state.get("search_query", "") or "")
-            selected_path = self._saved_state.get("selected_path")
-            queue_paths = [str(path) for path in self._saved_state.get("queue_paths", []) if path]
-            resume_path = self._saved_state.get("now_playing_path")
-            resume_playing = bool(self._saved_state.get("was_playing"))
-
-        search = self.query_one("#search", Input)
-        search.value = search_value
-
-        self._apply_filter(search_value, persist=False, select_path=selected_path)
-        self.queue = self._tracks_from_paths(queue_paths)
-        self._refresh_tracks_view(selected_path=selected_path)
-
-        if resume_playing and resume_path:
-            resume_track = self._track_from_path(resume_path)
-            if resume_track is not None:
-                self._play_track(resume_track, persist=False, notify=False)
-
+        self._rebuild_tracks_view()
+        self._restore_pending_track_state()
         self._render_status()
-        current = self._selected_track() or self.now_playing
-        self._render_details(current)
+        self._render_details(self._selected_track() or self.now_playing)
         self._render_visualizer()
         self._save_state()
+
+    def _append_scan_batch(self, generation: int, batch: list[Track]) -> None:
+        if generation != self._scan_generation or not batch:
+            return
+
+        self.tracks.extend(batch)
+        visible = [track for track in batch if self._track_matches_query(track, self.search_query)]
+        if visible:
+            self.filtered_tracks.extend(visible)
+            tracks_view = self.query_one("#tracks", ListView)
+            for track in visible:
+                item = ListItem(Static(track.display))
+                item.track = track  # type: ignore[attr-defined]
+                tracks_view.append(item)
+            self._restore_pending_track_state(batch)
+            self._maybe_initialize_selection(visible)
+        else:
+            self._restore_pending_track_state(batch)
+
+        self._render_status()
+        self._render_details(self._selected_track() or self.now_playing)
+        self._render_visualizer()
+        self._save_state()
+
+    def _finish_scan_result(self, generation: int) -> None:
+        if generation != self._scan_generation:
+            return
+        self._loading = False
+        if self.filtered_tracks and not self._selection_initialized:
+            self._selection_initialized = True
+            try:
+                self.query_one("#tracks", ListView).index = 0  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        self._render_status()
+        self._render_details(self._selected_track() or self.now_playing)
+        self._render_visualizer()
+        self._save_state()
+
+    def _maybe_initialize_selection(self, visible: list[Track]) -> None:
+        if self._selection_initialized:
+            return
+        selected = self._selected_track()
+        if selected is None and visible:
+            try:
+                self.query_one("#tracks", ListView).index = 0  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            self.current_index = self.tracks.index(visible[0]) if visible[0] in self.tracks else 0
+        self._selection_initialized = True
+
+    def _restore_pending_track_state(self, batch: list[Track] | None = None) -> None:
+        batch = batch or self.tracks
+        for track in batch:
+            path_text = str(track.path)
+            if self._pending_selected_path and path_text == self._pending_selected_path:
+                self._set_selected_track(track)
+                self._pending_selected_path = None
+            if self._pending_resume_path and path_text == self._pending_resume_path and self.now_playing is None:
+                self._play_track(track, persist=False, notify=False)
+                self._pending_resume_path = None
+            if (
+                path_text in self._pending_queue_paths
+                and path_text not in self._restored_queue_paths
+                and all(str(item.path) != path_text for item in self.queue)
+            ):
+                self.queue.append(track)
+                self._restored_queue_paths.add(path_text)
+        if self._pending_queue_paths and self._restored_queue_paths:
+            self._pending_queue_paths.difference_update(self._restored_queue_paths)
+
+    def _set_selected_track(self, track: Track) -> None:
+        try:
+            self.current_index = self.tracks.index(track)
+        except ValueError:
+            self.current_index = 0
+        self._selection_initialized = True
+        try:
+            self.query_one("#tracks", ListView).index = self.filtered_tracks.index(track)  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+    def _clear_tracks_view(self) -> None:
+        try:
+            self.query_one("#tracks", ListView).clear()
+        except Exception:
+            pass
+
+    def _rebuild_tracks_view(self) -> None:
+        tracks_view = self.query_one("#tracks", ListView)
+        tracks_view.clear()
+        for track in self.filtered_tracks:
+            item = ListItem(Static(track.display))
+            item.track = track  # type: ignore[attr-defined]
+            tracks_view.append(item)
+        if self.filtered_tracks:
+            selected = self._selected_track()
+            if selected in self.filtered_tracks:
+                try:
+                    tracks_view.index = self.filtered_tracks.index(selected)  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            else:
+                try:
+                    tracks_view.index = 0  # type: ignore[attr-defined]
+                except Exception:
+                    pass
 
     def _track_matches_query(self, track: Track, query: str) -> bool:
         if not query:
             return True
-        haystack = " ".join([
-            track.band,
-            track.album,
-            track.song,
-            track.path.name,
-            str(track.path),
-        ]).lower()
+        haystack = " ".join(
+            [track.band, track.album, track.song, track.path.name, str(track.path)]
+        ).lower()
         return query.lower() in haystack
 
     def _track_from_path(self, path_value: str | Path | None) -> Track | None:
@@ -207,47 +346,6 @@ class WaveTermMP3App(App):
             if current in self.filtered_tracks:
                 return current
         return self.filtered_tracks[0]
-
-    def _refresh_tracks_view(self, selected_path: str | None = None) -> None:
-        tracks_view = self.query_one("#tracks", ListView)
-        tracks_view.clear()
-        selected_track = self._track_from_path(selected_path) if selected_path else None
-        if selected_track is None and self.now_playing is not None:
-            selected_track = self.now_playing
-        if selected_track is None and self.filtered_tracks:
-            selected_track = self.filtered_tracks[0]
-
-        for track in self.filtered_tracks:
-            item = ListItem(Static(track.display))
-            item.track = track  # type: ignore[attr-defined]
-            tracks_view.append(item)
-
-        if selected_track is not None:
-            try:
-                self.current_index = self.tracks.index(selected_track)
-            except ValueError:
-                self.current_index = 0
-
-            try:
-                tracks_view.index = self.filtered_tracks.index(selected_track)  # type: ignore[attr-defined]
-            except Exception:
-                pass
-        elif self.tracks:
-            self.current_index = min(self.current_index, len(self.tracks) - 1)
-        else:
-            self.current_index = 0
-
-    def _apply_filter(self, query: str, persist: bool = True, select_path: str | None = None) -> None:
-        self.search_query = query
-        self.filtered_tracks = [track for track in self.tracks if self._track_matches_query(track, query)]
-        if not self.filtered_tracks:
-            self.current_index = 0
-        self._refresh_tracks_view(selected_path=select_path)
-        self._render_status()
-        self._render_details(self._selected_track() or self.now_playing)
-        self._render_visualizer()
-        if persist:
-            self._save_state()
 
     def _queue_paths(self) -> list[str]:
         return [str(track.path) for track in self.queue]
@@ -292,11 +390,9 @@ class WaveTermMP3App(App):
         if not self.now_playing:
             visual.update("Idle")
             return
-
         if not self.player.is_playing():
             visual.update(self._paused_visual())
             return
-
         visual.update(self._playing_visual())
 
     def _paused_visual(self) -> str:
@@ -426,6 +522,7 @@ class WaveTermMP3App(App):
                 self.current_index = self.tracks.index(track)
             except ValueError:
                 self.current_index = 0
+            self._selection_initialized = True
             self._render_details(track)
             self._render_status()
             self._render_visualizer()
@@ -438,12 +535,19 @@ class WaveTermMP3App(App):
                 self.current_index = self.tracks.index(track)
             except ValueError:
                 self.current_index = 0
+            self._selection_initialized = True
             self._play_track(track)
 
     def on_input_changed(self, event) -> None:
         if getattr(event.input, "id", None) != "search":
             return
-        self._apply_filter(event.value, persist=True)
+        self.search_query = event.value
+        self.filtered_tracks = [track for track in self.tracks if self._track_matches_query(track, self.search_query)]
+        self._rebuild_tracks_view()
+        self._render_status()
+        self._render_details(self._selected_track() or self.now_playing)
+        self._render_visualizer()
+        self._save_state()
 
     def action_focus_search(self) -> None:
         self.query_one("#search", Input).focus()
@@ -551,4 +655,10 @@ def main() -> None:
     if visual_mode not in {"pulse", "bars", "wave", "minimal", "auto"}:
         visual_mode = "pulse"
 
-    WaveTermMP3App(root=root, read_tags=read_tags, visuals=visuals, visual_mode=visual_mode, use_cache=use_cache).run()
+    WaveTermMP3App(
+        root=root,
+        read_tags=read_tags,
+        visuals=visuals,
+        visual_mode=visual_mode,
+        use_cache=use_cache,
+    ).run()
